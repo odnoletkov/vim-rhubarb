@@ -23,6 +23,16 @@ function! s:shellesc(arg) abort
   endif
 endfunction
 
+function! s:md5(str) abort
+  if executable('md5sum')
+    return system('md5sum', a:str)[:31]
+  elseif executable('md5')
+    return system('md5', a:str)[:31]
+  else
+    return ''
+  endif
+endfunction
+
 function! rhubarb#HomepageForUrl(url) abort
   let domain_pattern = 'github\.com'
   let domains = get(g:, 'github_enterprise_urls', get(g:, 'fugitive_github_domains', []))
@@ -270,7 +280,29 @@ function! rhubarb#FugitiveUrl(...) abort
   else
     let commit = opts.commit
   endif
-  if get(opts, 'type', '') ==# 'tree' || opts.path =~# '/$'
+  if get(opts, 'type', '') ==# 'commit'
+    let url = root . '/commit/' . commit
+    let start = get(opts, 'start')
+    let end = get(opts, 'end')
+    if !empty(start) && !empty(end) && start.oldpath ==# end.oldpath && start.newpath ==# end.newpath
+      let md5 = s:md5(len(start.newpath) > 0 ? start.newpath : start.oldpath)
+      if !empty(md5)
+        let url .= '#diff-' . md5
+        if start.cursor == '+'
+          let url .= 'R' . start.newline
+        else
+          let url .= 'L' . start.oldline
+        endif
+        if end.oldline - start.oldline + end.newline - start.newline > 0
+          if end.cursor == '+'
+            let url .= '-R' . end.newline
+          else
+            let url .= '-L' . end.oldline
+          endif
+        endif
+      endif
+    endif
+  elseif get(opts, 'type', '') ==# 'tree' || opts.path =~# '/$'
     let url = substitute(root . '/tree/' . commit . '/' . path, '/$', '', 'g')
   elseif get(opts, 'type', '') ==# 'blob' || opts.path =~# '[^/]$'
     let escaped_commit = substitute(commit, '#', '%23', 'g')
